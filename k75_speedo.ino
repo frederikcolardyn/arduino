@@ -8,9 +8,6 @@ Adafruit_8x8matrix matrix = Adafruit_8x8matrix();
 // speedo variables
 int pinSpeedoSensor = A3;
 int reedCounter = 0;
-int sensorValue = 0;        // raw sensor value, 0 to 1023
-int sensorState = 0;       // the current sensorState from the input pin
-int lastSensorState = 0;   // the previous sensorState from the input pin
 
 static const uint8_t PROGMEM
   logo_bmp[] = {
@@ -119,7 +116,7 @@ int counter = 0;
 void loop() {
   matrix.clear();
   speedo();
-  delay(500);
+  delay(200);
 }
 
 void configureDisplay() {
@@ -162,10 +159,72 @@ void logo(){
   matrix.writeDisplay();
 }
 
+unsigned long high0 = 0;
+unsigned long high1 = 0;
+unsigned long high2 = 0;
+unsigned long high3 = 0;
+unsigned long high4 = 0;
+unsigned long high5 = 0;
+int kmhprev = 0;
+
+unsigned long highprev = 0;
+
 void speedo(){
-  Serial.println(reedCounter);
-  printnr(reedCounter, 0, 0);
-  reedCounter = 0;
+  // Serial.println(reedCounter);
+  int kmh = 0;
+
+  if (high0 == highprev){
+//    Serial.print(high0);
+//    Serial.println(" -> stationary");
+    kmh = 0;
+  } else {
+    int lapse5 = high4 - high5;
+    int lapse4 = high3 - high4;
+    int lapse3 = high2 - high3;
+    int lapse2 = high1 - high2;
+    int lapse1 = high0 - high1;
+
+    int lapses[] = {high4 - high5, high3 - high4, high2 - high3, high1 - high2, high0 - high1};
+    int count = 0;
+    float total = 0;
+    int i;
+    for (i = 0; i < 5; i = i + 1) {
+//      Serial.print(" l");
+//      Serial.print(i);
+//      Serial.print(": ");
+//      Serial.print(lapses[i]);
+
+      if (lapses[i] < 2 * lapses[0] && lapses[i] > lapses[0] / 2){
+          total += lapses[i];
+          count ++;
+      }
+    }
+    
+    // a lapse should be between 5ms and 150ms
+    // 180kmh = 50m/sec = 150 pulses / sec = 6ms lapse
+    // 120kmh = 33.3m/sec = 100 pulses / sec = 10ms lapse
+    // 7kmh = 2m/sec = 8 pulses / sec = 125ms lapse
+    
+    // take avg
+    if (count >= 4){
+      float lapse = total / count;
+      kmh = 1200 / lapse;  
+    } else {
+      kmh = kmhprev;
+    }
+//    
+//    Serial.print(" - reliable count ");
+//    Serial.print(count);
+//    
+//    Serial.print(" - time ");
+//    Serial.print(millis());
+// 
+//    Serial.print(" - kmh ");
+//    Serial.println(kmh);
+  }
+  printnr(kmh, 0, 0);
+  kmhprev = kmh;
+  highprev = high0;
 }
 
 // display functions
@@ -180,7 +239,7 @@ void printnr(int number, int xoffset, int yoffset){
 
   if (number > 99){
     int third = (int)((number / 100) % 10);
-    xoffset -= 4;
+    xoffset -= 3;
     printnr_digit(third, xoffset, yoffset);  
   }
 }
@@ -229,12 +288,20 @@ ISR(TIMER1_COMPA_vect) {//Interrupt at freq of 1kHz to measure reed switch
 }
 
 int signalcount = 0;
+int sensorValue = 0;        // raw sensor value, 0 to 1023
+int sensorState = 0;       // the current sensorState from the input pin
+int lastSensorState = 0;   // the previous sensorState from the input pin
+// 4800 pulses per mile -> 2983 pulses per km -> approx 3 pulses per meter
+unsigned long clockcount = 0;
 
 void readSpeedoSensor() {
+  clockcount ++;
   sensorValue = analogRead(pinSpeedoSensor);
 
-  if (sensorValue > 120) {
+  if (sensorValue > 100) {
       sensorState = 1;
+  } else if (sensorValue == 0) {
+      sensorState = 0;
   } else {
       sensorState = 0;
   }
@@ -246,8 +313,13 @@ void readSpeedoSensor() {
     signalcount ++;
   }
 
-  if (signalcount == 3) { // 3 consecutive ms seems reliable. at idle speed, we have 5 to 7 1ms > 100mv
-    reedCounter ++;
+  if (signalcount == 4) { // 3 consecutive ms seems reliable. at idle speed, we have 5 to 7 1ms > 100mv
+    high5 = high4;
+    high4 = high3;
+    high3 = high2;
+    high2 = high1;
+    high1 = high0;
+    high0 = clockcount;
   }
   
 //  if (logcount % 100 == 0){
@@ -257,9 +329,13 @@ void readSpeedoSensor() {
 //    Serial.print(" - ");
 //    Serial.print(signalcount);
 //    Serial.print(" - ");
-//    Serial.println(reedCounter);
+//    Serial.println(high0);
 //  }
 
   // save the sensorState. Next time through the loop, it'll be the lastSensorState:
   lastSensorState = sensorState;
+  if (clockcount >= 4294967290){
+      clockcount = 0;
+  }
+  
 }
