@@ -3,11 +3,15 @@
 #include "Adafruit_LEDBackpack.h"
 #include "Adafruit_GFX.h"
 
-Adafruit_8x8matrix matrix = Adafruit_8x8matrix();
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define OLED_RESET 4
+Adafruit_SSD1306 display(OLED_RESET);
 
 // speedo variables
-int pinSpeedoSensor = A3;
-int reedCounter = 0;
+int pinSpeedoSensor = A3; // analog 3
+int displayPinHigh = 11; // digital 11
 
 static const uint8_t PROGMEM
   logo_bmp[] = {
@@ -89,6 +93,76 @@ static const uint8_t PROGMEM
         B101,
         B101,
         B111,
+      },
+      one_small[] = {
+        B01,
+        B01,
+        B01,
+        B01,
+        B01,
+      },
+      two_small[] = {
+        B11,
+        B01,
+        B11,
+        B10,
+        B11,
+      },
+      three_small[] = {
+        B11,
+        B01,
+        B11,
+        B01,
+        B11,
+      },
+      four_small[] = {
+        B11,
+        B11,
+        B11,
+        B01,
+        B01,
+      },
+      five_small[] = {
+        B11,
+        B10,
+        B11,
+        B01,
+        B11,
+      },
+      six_small[] = {
+        B11,
+        B10,
+        B11,
+        B11,
+        B11,
+      },
+      seven_small[] = {
+        B11,
+        B01,
+        B01,
+        B01,
+        B01,
+      },
+      eight_small[] = {
+        B11,
+        B11,
+        B00,
+        B11,
+        B11,
+      },
+      nine_small[] = {
+        B11,
+        B11,
+        B11,
+        B01,
+        B01,
+      },
+      zero_small[] = {
+        B11,
+        B11,
+        B11,
+        B11,
+        B11,
       }
     ;
 
@@ -101,8 +175,8 @@ void setup() {
   analogReference(INTERNAL); // set reference voltage to 1.1v. 1023 = 1.1v, 0 = 0v. Peak voltage of bmw sensor should be ± 400.
 
   // pinMode(A2, INPUT);
-  pinMode(10, OUTPUT);
-  digitalWrite(10, HIGH);
+  pinMode(displayPinHigh, OUTPUT);
+  digitalWrite(displayPinHigh, HIGH);
 
   configureDisplay();
  
@@ -114,16 +188,34 @@ void setup() {
 int counter = 0;
 
 void loop() {
-  matrix.clear();
-  speedo();
-  delay(200);
+  // matrix.clear();
+  // speedo();
+  demo();
+  delay(2000);
+}
+
+void demo(){  
+  
 }
 
 void configureDisplay() {
-  matrix.begin(0x70);  // pass in the address
-  matrix.setTextSize(1);     // size 1 == 8 pixels high
-  matrix.setTextWrap(false); // Don't wrap at end of line - will do ourselves
-  matrix.setBrightness(5); // 10 is max to to exceed 20m amps
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);  // initialize with the I2C addr 0x3D (for the 128x64)
+  display.display();
+  delay(2000);
+
+  // Clear the buffer.
+  display.clearDisplay();
+
+  // draw a single pixel
+  // text display tests
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  display.println("K75 SKRAMBLER");
+  display.display();
+  delay(2000);
+  display.clearDisplay();
+
 }
 
 void configureInterupts() {
@@ -145,18 +237,10 @@ void configureInterupts() {
   //END TIMER SETUP
 }
 
+int count = 0;
 void logo(){
-  matrix.clear();
-  matrix.drawBitmap(0, 0, logo_bmp, 8, 8, LED_ON);
-  matrix.fillRect(0, 6, 2, 2, LED_ON);
-  matrix.fillRect(3, 6, 2, 2, LED_ON);
-  matrix.fillRect(6, 6, 2, 2, LED_ON);
-  matrix.writeDisplay();
-  
-  delay(1000); 
-
-  matrix.fillRect(0, 0, 8, 8, LED_OFF);
-  matrix.writeDisplay();
+  display.println(count++);
+  display.display();
 }
 
 unsigned long high0 = 0;
@@ -170,12 +254,9 @@ int kmhprev = 0;
 unsigned long highprev = 0;
 
 void speedo(){
-  // Serial.println(reedCounter);
   int kmh = 0;
 
   if (high0 == highprev){
-//    Serial.print(high0);
-//    Serial.println(" -> stationary");
     kmh = 0;
   } else {
     int lapse5 = high4 - high5;
@@ -189,11 +270,6 @@ void speedo(){
     float total = 0;
     int i;
     for (i = 0; i < 5; i = i + 1) {
-//      Serial.print(" l");
-//      Serial.print(i);
-//      Serial.print(": ");
-//      Serial.print(lapses[i]);
-
       if (lapses[i] < 2 * lapses[0] && lapses[i] > lapses[0] / 2){
           total += lapses[i];
           count ++;
@@ -212,75 +288,15 @@ void speedo(){
     } else {
       kmh = kmhprev;
     }
-//    
-//    Serial.print(" - reliable count ");
-//    Serial.print(count);
-//    
-//    Serial.print(" - time ");
-//    Serial.print(millis());
-// 
-//    Serial.print(" - kmh ");
-//    Serial.println(kmh);
   }
-  printnr(kmh, 0, 0);
+  display.println(kmh);
+  display.display();
   kmhprev = kmh;
   highprev = high0;
 }
 
-// display functions
-void printnr(int number, int xoffset, int yoffset){
-  int first = (number % 10);
-  printnr_digit(first, xoffset, yoffset);  
-  if (number > 9){
-    int second = (int)((number / 10) % 10);
-    xoffset -= 4;
-    printnr_digit(second, xoffset, yoffset);  
-  }
-
-  if (number > 99){
-    int third = (int)((number / 100) % 10);
-    xoffset -= 3;
-    printnr_digit(third, xoffset, yoffset);  
-  }
-}
-
-void printnr_digit(int number, int xoffset, int yoffset){
- switch (number) {
-    case 0:
-      matrix.drawBitmap(xoffset, yoffset, zero, 8, 5, LED_ON);
-      break;
-    case 1:
-      matrix.drawBitmap(xoffset, yoffset, one, 8, 5, LED_ON);
-      break;
-    case 2:
-      matrix.drawBitmap(xoffset, yoffset, two, 8, 5, LED_ON);
-      break;
-    case 3:
-      matrix.drawBitmap(xoffset, yoffset, three, 8, 5, LED_ON);
-      break;
-    case 4:
-      matrix.drawBitmap(xoffset, yoffset, four, 8, 5, LED_ON);
-      break;
-    case 5:
-      matrix.drawBitmap(xoffset, yoffset, five, 8, 5, LED_ON);
-      break;
-    case 6:
-      matrix.drawBitmap(xoffset, yoffset, six, 8, 5, LED_ON);
-      break;
-    case 7:
-      matrix.drawBitmap(xoffset, yoffset, seven, 8, 5, LED_ON);
-      break;
-    case 8:
-      matrix.drawBitmap(xoffset, yoffset, eight, 8, 5, LED_ON);
-      break;
-    case 9:
-      matrix.drawBitmap(xoffset, yoffset, nine, 8, 5, LED_ON);
-      break;
-    break;
-  }
- 
-  matrix.writeDisplay();
-}
+int prevnr1 = 0 ;
+int prevnr2 = 0 ;
 
 // timer functions
 ISR(TIMER1_COMPA_vect) {//Interrupt at freq of 1kHz to measure reed switch
@@ -322,16 +338,6 @@ void readSpeedoSensor() {
     high0 = clockcount;
   }
   
-//  if (logcount % 100 == 0){
-//    Serial.print(sensorState); 
-//    Serial.print(" - ");
-//    Serial.print(sensorValue);
-//    Serial.print(" - ");
-//    Serial.print(signalcount);
-//    Serial.print(" - ");
-//    Serial.println(high0);
-//  }
-
   // save the sensorState. Next time through the loop, it'll be the lastSensorState:
   lastSensorState = sensorState;
   if (clockcount >= 4294967290){
