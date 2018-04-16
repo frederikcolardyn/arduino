@@ -1,170 +1,24 @@
 #include <SPI.h>
 #include <Wire.h>
-#include "Adafruit_LEDBackpack.h"
-#include "Adafruit_GFX.h"
-
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <Fonts/FreeMonoBoldOblique9pt7b.h>
 
-#define OLED_RESET 4
+#define OLED_RESET  4
 Adafruit_SSD1306 display(OLED_RESET);
+
+#if (SSD1306_LCDHEIGHT != 64)
+// #error("Height incorrect, please fix Adafruit_SSD1306.h!");
+#endif
 
 // speedo variables
 int pinSpeedoSensor = A3; // analog 3
-int displayPinHigh = 11; // digital 11
+int pinFuelSensor = A0;
+int pinTemperatureSensor = A1;
+int pinOilSensor = A2;
 
-static const uint8_t PROGMEM
-  logo_bmp[] = {
-        B00011100,
-        B00001100,
-        B00111100,
-        B00000000,
-        B00111100,
-        B00011000,
-        B11011011,
-        B11000011
-      },
-    one[] = {
-        B001,
-        B001,
-        B001,
-        B001,
-        B001,
-      },
-      two[] = {
-        B111,
-        B001,
-        B111,
-        B100,
-        B111,
-      },
-      three[] = {
-        B111,
-        B001,
-        B111,
-        B001,
-        B111,
-      },
-      four[] = {
-        B101,
-        B101,
-        B111,
-        B001,
-        B001,
-      },
-      five[] = {
-        B111,
-        B100,
-        B111,
-        B001,
-        B111,
-      },
-      six[] = {
-        B111,
-        B100,
-        B111,
-        B101,
-        B111,
-      },
-      seven[] = {
-        B111,
-        B001,
-        B001,
-        B001,
-        B001,
-      },
-      eight[] = {
-        B111,
-        B101,
-        B111,
-        B101,
-        B111,
-      },
-      nine[] = {
-        B111,
-        B101,
-        B111,
-        B001,
-        B001,
-      },
-      zero[] = {
-        B111,
-        B101,
-        B101,
-        B101,
-        B111,
-      },
-      one_small[] = {
-        B01,
-        B01,
-        B01,
-        B01,
-        B01,
-      },
-      two_small[] = {
-        B11,
-        B01,
-        B11,
-        B10,
-        B11,
-      },
-      three_small[] = {
-        B11,
-        B01,
-        B11,
-        B01,
-        B11,
-      },
-      four_small[] = {
-        B11,
-        B11,
-        B11,
-        B01,
-        B01,
-      },
-      five_small[] = {
-        B11,
-        B10,
-        B11,
-        B01,
-        B11,
-      },
-      six_small[] = {
-        B11,
-        B10,
-        B11,
-        B11,
-        B11,
-      },
-      seven_small[] = {
-        B11,
-        B01,
-        B01,
-        B01,
-        B01,
-      },
-      eight_small[] = {
-        B11,
-        B11,
-        B00,
-        B11,
-        B11,
-      },
-      nine_small[] = {
-        B11,
-        B11,
-        B11,
-        B01,
-        B01,
-      },
-      zero_small[] = {
-        B11,
-        B11,
-        B11,
-        B11,
-        B11,
-      }
-    ;
+int displayPinHigh = 11; // digital 11
+int displayPinLow = 10; // digital 10
 
 void setup() {
   // put your setup code here, to run once:
@@ -174,48 +28,54 @@ void setup() {
   // pinMode(pinSpeedoSensor, INPUT);
   analogReference(INTERNAL); // set reference voltage to 1.1v. 1023 = 1.1v, 0 = 0v. Peak voltage of bmw sensor should be ± 400.
 
-  // pinMode(A2, INPUT);
+  pinMode(displayPinLow, OUTPUT);
   pinMode(displayPinHigh, OUTPUT);
+  digitalWrite(displayPinHigh, LOW);
   digitalWrite(displayPinHigh, HIGH);
 
-  configureDisplay();
- 
-  logo();
+  delay(200); // boot display
 
+  configureDisplay();
   configureInterupts();
 }
 
 int counter = 0;
 
 void loop() {
-  // matrix.clear();
-  // speedo();
-  demo();
-  delay(2000);
-}
-
-void demo(){  
-  
+  display.setFont();
+  display.clearDisplay();
+  display.setCursor(0,0);
+  speedo();
+  display.display();
+  delay(300);
 }
 
 void configureDisplay() {
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);  // initialize with the I2C addr 0x3D (for the 128x64)
-  display.display();
-  delay(2000);
-
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32) 0x3D for 64?
+  
+  display.ssd1306_command(SSD1306_SETCONTRAST);
+  display.ssd1306_command(255);
+  display.ssd1306_command(SSD1306_INVERTDISPLAY);
+  
   // Clear the buffer.
   display.clearDisplay();
 
   // draw a single pixel
   // text display tests
-  display.setTextSize(1);
+  display.setTextSize(2);
   display.setTextColor(WHITE);
-  display.setCursor(0,0);
-  display.println("K75 SKRAMBLER");
+  display.setCursor(45,10);
+  display.println("K75");
   display.display();
-  delay(2000);
+  delay(2500);
   display.clearDisplay();
-
+  display.setCursor(10,10);
+  display.println("SKRAMBLER");
+  display.display();
+  delay(3000);
+  
+  display.clearDisplay();
+  
 }
 
 void configureInterupts() {
@@ -235,12 +95,6 @@ void configureInterupts() {
 
   sei();//allow interrupts
   //END TIMER SETUP
-}
-
-int count = 0;
-void logo(){
-  display.println(count++);
-  display.display();
 }
 
 unsigned long high0 = 0;
@@ -270,7 +124,7 @@ void speedo(){
     float total = 0;
     int i;
     for (i = 0; i < 5; i = i + 1) {
-      if (lapses[i] < 2 * lapses[0] && lapses[i] > lapses[0] / 2){
+      if (lapses[i] < 1.5 * lapses[0] && lapses[i] > lapses[0] / 1.5){
           total += lapses[i];
           count ++;
       }
@@ -289,8 +143,16 @@ void speedo(){
       kmh = kmhprev;
     }
   }
-  display.println(kmh);
-  display.display();
+  display.setCursor(10,5);
+  display.setTextSize(4); // 4
+  display.print(kmh);
+//  display.setTextSize(1); // 2
+  display.setTextSize(2); // 2
+  display.setFont();
+//  display.setFont(&FreeMonoBoldOblique9pt7b);
+//  display.setCursor(86,30); // 86, 17 with default font
+display.setCursor(86,17); // 86, 17 with default font
+  display.println("kmh");
   kmhprev = kmh;
   highprev = high0;
 }
@@ -329,7 +191,7 @@ void readSpeedoSensor() {
     signalcount ++;
   }
 
-  if (signalcount == 4) { // 3 consecutive ms seems reliable. at idle speed, we have 5 to 7 1ms > 100mv
+  if (signalcount == 3) { // 3 consecutive ms seems reliable. at idle speed, we have 5 to 7 1ms > 100mv
     high5 = high4;
     high4 = high3;
     high3 = high2;
